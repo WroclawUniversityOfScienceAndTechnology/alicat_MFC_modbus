@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alicat: sterowanie przepływem</title>
+<style>
+  :root {
+    --tlo: #e4eaee; --karta: #f9fbfc; --karta2: #eef2f5; --tusz: #13242d; --tusz2: #51636d;
+    --linia: #c5d0d7; --akcent: #0a6c9e; --akcent-t: #d6e9f3; --nastawa: #d4691a;
+    --ok: #17844a; --ok-t: #d9f0e2; --zle: #c23b2e; --zle-t: #f8dedb; --bursztyn: #a8660a; --bursztyn-t: #f6e8cf;
+    --czcionka: "Bahnschrift", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font-family: var(--czcionka); background: var(--tlo); color: var(--tusz); font-size: 14px; line-height: 1.35; }
+  h1, h2, h3 { margin: 0; font-weight: 600; }
+  button { font: inherit; padding: 6px 12px; border: 1px solid var(--linia); border-radius: 6px;
+           background: var(--karta); color: var(--tusz); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--akcent); color: var(--akcent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--akcent); outline-offset: 2px; }
+  button.start { background: var(--ok); border-color: var(--ok); color: #fff; }
+  button.start:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+  button.stop { background: var(--zle); border-color: var(--zle); color: #fff; }
+  button.stop:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+  button.mala { padding: 3px 10px; font-size: 13px; }
+  input, select { font: inherit; padding: 5px 7px; border: 1px solid var(--linia); border-radius: 6px;
+                  background: #fff; color: var(--tusz); min-width: 0; }
+  input[type=number] { width: 92px; }
+
+  header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 16px;
+           padding: 14px 20px 12px; background: var(--karta); border-bottom: 1px solid var(--linia); }
+  .marka { font-size: 15px; color: var(--tusz2); padding-top: 9px; }
+  .prawa { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 4px; }
+  .centrum { display: grid; justify-items: center; gap: 5px; }
+  .polaczenie { display: inline-flex; align-items: center; gap: 12px; padding: 9px 22px; border-radius: 999px;
+                font-size: 20px; border: 1.5px dashed var(--linia); color: var(--tusz2); background: var(--karta2); }
+  .polaczenie .kropka { width: 11px; height: 11px; border-radius: 50%; background: var(--linia); }
+  .polaczenie.szuka .kropka { animation: puls 1.3s ease-in-out infinite; background: var(--bursztyn); }
+  .polaczenie.jest { border: 1.5px solid var(--ok); color: var(--ok); background: var(--ok-t); }
+  .polaczenie.jest .kropka { background: var(--ok); }
+  .polaczenie b { font-weight: 700; }
+  @keyframes puls { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .polaczenie.szuka .kropka { animation: none; } }
+  .podpis { font-size: 12.5px; color: var(--tusz2); min-height: 17px; text-align: center; }
+  .podpis .zle { color: var(--zle); }
+  #status-zas { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--karta2);
+                border: 1px solid var(--linia); color: var(--tusz2); white-space: nowrap; }
+  #status-zas.jest { background: var(--ok-t); border-color: var(--ok); color: var(--ok); }
+  #status-ws { font-size: 12.5px; color: var(--ok); }
+  #status-ws.zle { color: var(--zle); font-weight: 600; }
+
+  .uklad { display: grid; gap: 16px; padding: 16px 20px 28px; }
+  .okno-alicaty { display: flex; gap: 16px; align-items: flex-start; max-height: 74vh; overflow: auto;
+                  padding: 4px 4px 8px; border: 1px solid var(--linia); border-radius: 10px; background: var(--karta2); }
+  #urzadzenia { flex: 1 0 auto; display: grid; grid-template-columns: repeat(var(--kol, 1), 628px);
+                justify-content: safe center; gap: 16px; align-items: start; padding: 8px; }  .prawa-kolumna { flex: none; width: 300px; display: grid; gap: 12px; position: sticky; top: 0; padding: 8px 8px 8px 0; }
+  .grupa { width: 628px; display: grid; gap: 10px; }
+  .korpus { display: flex; gap: 12px; align-items: flex-start; }
+  .karta { background: var(--karta); border: 1px solid var(--linia); border-radius: 8px; padding: 14px; }
+  .info { width: 226px; }
+  .dane { width: 390px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .dane > * { min-width: 0; }
+  .pusty { width: 100%; max-width: 640px; border: 1.5px dashed var(--linia); border-radius: 8px;
+           padding: 28px 26px; color: var(--tusz2); background: var(--karta2); }
+  .pusty h2 { color: var(--tusz); font-size: 18px; margin-bottom: 6px; }
+  .pusty p { margin: 4px 0; max-width: 54ch; }
+
+  .glowa { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+  .glowa h2 { font-size: 20px; overflow-wrap: anywhere; }
+  .glowa .zwin { margin-left: auto; min-width: 74px; }
+  .mini { display: none; color: var(--tusz2); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .znacznik { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--ok-t); color: var(--ok); }
+  .znacznik.zle { background: var(--zle-t); color: var(--zle); }
+  .kartazw { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kartazw h3 { font-size: 15px; }
+  .kartazw .przyc { display: flex; gap: 6px; align-items: center; }
+  .karta.zw > .zawartosc { display: none; }
+  .karta.zw .kartazw { margin-bottom: 0 !important; }
+  .info.zw { width: auto; } .kartazw button { white-space: nowrap; }
+  .karta > .zawartosc { margin-top: 8px; }
+  .grupa.zwinieta .korpus, .grupa.zwinieta .tryby-panel { display: none; }
+  .grupa.zwinieta .mini { display: inline; }
+  .grupa.zwinieta .glowa { flex-wrap: wrap; row-gap: 2px; }
+  .grupa.zwinieta .mini { flex-basis: 100%; order: 5; }
+  .grupa.rozlaczony .karta:not(.glowa) { background: var(--karta2); }
+  .grupa.rozlaczony .tabela td, .grupa.rozlaczony canvas, .grupa.rozlaczony dl.lista dd { opacity: .5; }
+
+  .awarie { display: grid; gap: 6px; width: 0; min-width: 100%; }
+  .awaria { border-radius: 8px; padding: 10px 14px; border: 1.5px solid var(--zle); background: var(--zle-t); color: var(--tusz); }
+  .awaria.ostrzezenie { border-color: var(--bursztyn); background: var(--bursztyn-t); }
+  .awaria b { color: var(--zle); font-size: 15px; }
+  .awaria.ostrzezenie b { color: var(--bursztyn); }
+  .awaria p { margin: 3px 0 0; font-size: 12.5px; max-width: 78ch; }
+  .awaria .wsk { color: var(--tusz2); }
+  .awaria .szcz { color: var(--tusz2); font-size: 12px; }
+
+  dl.lista { margin: 0; display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 0 10px; }
+  dl.lista dt { color: var(--tusz2); padding: 6px 0; border-top: 1px solid var(--karta2); }
+  dl.lista dt:first-of-type, dl.lista dt:first-of-type + dd { border-top: 0; }
+  dl.lista dd { margin: 0; padding: 6px 0; border-top: 1px solid var(--karta2); text-align: right;
+                font-variant-numeric: tabular-nums; white-space: nowrap; }
+  dl.lista .dlugi { grid-column: 1 / -1; }
+  dl.lista dt.dlugi { padding-bottom: 0; }
+  dl.lista dd.dlugi { white-space: normal; overflow-wrap: anywhere; text-align: left; padding-top: 0; font-size: 13px; }
+  .uwaga { margin: 10px 0 0; font-size: 12.5px; padding: 7px 9px; border-radius: 6px; background: var(--bursztyn-t); color: var(--bursztyn); }
+  .info .akcje { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  .naglowek-danych { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .naglowek-danych h3 { font-size: 15px; }
+  .zawory { display: flex; gap: 6px; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .tabela { width: 100%; }
+  .tabela th { text-align: left; font-weight: 500; color: var(--tusz2); padding: 5px 0; border-top: 1px solid var(--karta2); width: 52%; }
+  .tabela td { text-align: right; padding: 5px 0; border-top: 1px solid var(--karta2); overflow-wrap: anywhere; }
+  .tabela tr:first-child th, .tabela tr:first-child td { border-top: 0; }
+  .tabela tr.glowny th, .tabela tr.glowny td { color: var(--akcent); font-weight: 600; font-size: 15.5px; background: var(--akcent-t); }
+  .tabela tr.glowny th { padding-left: 8px; border-radius: 5px 0 0 5px; }
+  .tabela tr.glowny td { padding-right: 8px; border-radius: 0 5px 5px 0; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .zle { color: var(--zle); font-weight: 600; }
+  .podtytul { margin: 12px 0 4px; font-size: 13px; color: var(--tusz2); }
+  .przewijana { overflow-x: auto; }
+  .ostatnie { width: 100%; font-size: 11.5px; white-space: nowrap; }
+  .ostatnie th { text-align: right; font-weight: 500; color: var(--tusz2); padding: 3px 7px 3px 0; font-size: 11.5px; }
+  .ostatnie td { text-align: right; padding: 4px 7px 4px 0; border-top: 1px solid var(--karta2); }
+  .ostatnie th:first-child, .ostatnie td:first-child { text-align: left; }
+  .ostatnie tbody tr:first-child td { font-weight: 600; background: var(--karta2); }
+
+  .opcje { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 8px; }
+  .opcje label { display: grid; gap: 2px; font-size: 12px; color: var(--tusz2); min-width: 0; }
+  .opcje select { max-width: 170px; }
+  .opcje.zywe { display: grid; grid-template-columns: 1fr 1.5fr .7fr; }
+  .opcje.zywe select { max-width: none; width: 100%; }
+  .zakres { display: flex; gap: 4px; }
+  .zakres input { width: 70px; }
+  canvas { width: 100%; height: 230px; display: block; background: #fff; border: 1px solid var(--karta2); border-radius: 6px; }
+  #wykres { height: 360px; }
+  .ogolny .naglowek-danych h3 { font-size: 17px; }
+  #status-zas, #status-ws, #wyk-stan { display: none !important; }
+  #wyk-stan { font-size: 12.5px; color: var(--tusz2); }
+  #wyk-stan.trwa { color: var(--ok); font-weight: 600; }
+  .przyciski-wykresu { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 10px; }
+  .legenda { font-size: 12px; color: var(--tusz2); margin-top: 4px; }
+
+  .tryby-panel { width: 100%; }
+  .zas-stan { font-size: 12.5px; padding: 2px 9px; border-radius: 999px; background: var(--karta2); color: var(--tusz2); }
+  .zas-stan.jest { background: var(--ok-t); color: var(--ok); font-weight: 600; }
+  .zas-reczne { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--karta2); display: grid; gap: 6px; }
+  .zas-reczne .pole em { width: 24px; }
+  .zas-reczne .pole input { width: 84px; }
+  .zas-reczne .przelacznik { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  .wpis { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .wpis small { color: var(--tusz2); font-size: 12px; }
+  .wpis button[aria-pressed=true] { background: var(--akcent); border-color: var(--akcent); color: #fff; }
+  details.tryb { border: 1px solid var(--linia); border-radius: 6px; background: #fff; }
+  details.tryb + details.tryb { margin-top: 6px; }
+  details.tryb summary { cursor: pointer; list-style: none; padding: 9px 12px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  details.tryb summary::-webkit-details-marker { display: none; }
+  details.tryb summary::before { content: "+"; display: inline-grid; place-items: center; width: 20px; height: 20px;
+        border-radius: 5px; background: var(--akcent-t); color: var(--akcent); font-weight: 700; }
+  details.tryb[open] summary::before { content: "−"; }
+  details.tryb[open] summary { border-bottom: 1px solid var(--karta2); }
+  details.tryb .aktywny { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ok); background: var(--ok-t);
+        padding: 1px 8px; border-radius: 999px; }
+  .tresc { padding: 10px 12px 12px; display: grid; gap: 8px; }
+  .opis { color: var(--tusz2); font-size: 12.5px; }
+  .pole { display: flex; align-items: center; gap: 8px; }
+  .pole span { flex: 1; }
+  .pole em { color: var(--tusz2); font-style: normal; font-size: 12.5px; width: 62px; }
+  .rownanie { font-size: 18px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .rownanie input { width: 72px; }
+  .podpowiedz { color: var(--tusz2); font-size: 12.5px; min-height: 17px; }
+  .przyciski { display: flex; gap: 8px; flex-wrap: wrap; }
+  .grupa.nieuzywany > .glowa { opacity: .75; }
+
+  .suma h3 { font-size: 15px; margin-bottom: 6px; }
+  .suma-duza { font-size: 34px; font-weight: 600; color: var(--akcent); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .suma-duza small { font-size: 16px; font-weight: 500; color: var(--tusz2); }
+  .suma-opis { color: var(--tusz2); font-size: 12.5px; margin: 2px 0 8px; }
+  .suma-nastawa { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--karta2); font-size: 12.5px; color: var(--tusz2); }
+  .suma-nastawa b { color: var(--nastawa); font-variant-numeric: tabular-nums; }
+  .suma-limit { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--karta2); display: grid; gap: 6px; }
+  .limit-wiersz { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+  .limit-wiersz input { width: 18px; height: 18px; margin: 0; }
+  .limit-pole { display: flex; align-items: center; gap: 8px; }
+  .limit-pole input { width: 120px; }
+  .limit-pole em { font-style: normal; color: var(--tusz2); }
+  .gotowy { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; cursor: pointer; }
+  .gotowy input { width: 17px; height: 17px; margin: 0; flex: none; }
+  .plamka { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; }
+
+  .zakladki { display: flex; gap: 4px; border-bottom: 2px solid var(--linia); margin-bottom: -4px; }
+  .zakladki button { border: 1px solid var(--linia); border-bottom: 0; border-radius: 8px 8px 0 0; padding: 9px 26px; font-size: 16px; background: var(--karta2); margin-bottom: -2px; }
+  .zakladki button[aria-selected=true] { background: var(--karta); color: var(--akcent); font-weight: 600; border-bottom: 2px solid var(--karta); }
+  .okno-alicaty { max-height: calc(100vh - 210px) !important; }
+  body.widok-wykres .zakladki, body.widok-wykres #okno-alicaty { display: none; }
+  body:not(.widok-wykres) #okno-wykresu { display: none; }
+  .okno-wykresu { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .wyb h4 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .wyb .opis { margin: 0 0 8px; }
+  .wyb-wiersz { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-top: 1px solid var(--karta2); cursor: pointer; }
+  .wyb-wiersz input { width: 18px; height: 18px; margin: 0; flex: none; }
+  .wyb-tekst { display: grid; min-width: 0; }
+  .proces { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--karta2); }
+  .proces .duzy { padding: 12px 8px; font-size: 17px; font-weight: 600; }
+  .opcje-rzad { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+  .suma-wyk { min-width: 250px; border: 1px solid var(--linia); border-radius: 8px; padding: 8px 12px; font-size: 13px; background: var(--karta2); }
+  .suma-wyk .duza { font-size: 22px; font-weight: 600; color: var(--akcent); font-variant-numeric: tabular-nums; }
+  .suma-wyk table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+  .suma-wyk th { text-align: left; font-weight: 500; padding: 1px 8px 1px 0; }
+  .suma-wyk td { text-align: right; font-variant-numeric: tabular-nums; padding: 1px 0; }
+  .suma-wyk .max { color: var(--tusz2); border-top: 1px solid var(--linia); padding-top: 4px; }
+  .suma-wyk .max b { color: var(--tusz); font-variant-numeric: tabular-nums; }
+  .wyb-tekst b { font-size: 15px; overflow-wrap: anywhere; }
+  .wyb-tekst small { color: var(--tusz2); font-size: 12px; overflow-wrap: anywhere; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--tusz);
+           color: #fff; padding: 10px 16px; border-radius: 8px; max-width: 80vw; z-index: 10; }
+  dialog { border: 1px solid var(--linia); border-radius: 10px; padding: 18px; min-width: 330px; background: var(--karta); color: var(--tusz); }
+  dialog::backdrop { background: rgba(19, 36, 45, .35); }
+  dialog form { display: grid; gap: 10px; }
+  dialog label { display: grid; gap: 3px; font-size: 13px; color: var(--tusz2); }
+  dialog input { width: 100%; }
+  dialog .stale { color: var(--tusz2); font-size: 12.5px; }
+
+  @media (max-width: 900px) { .okno-alicaty { flex-direction: column; max-height: none; } .prawa-kolumna { width: 100%; position: static; padding: 0 8px 8px; }
+                              .okno-wykresu { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 720px) {
+    header { grid-template-columns: 1fr; } .marka { display: none; } .prawa { justify-content: center; }
+    .polaczenie { font-size: 16px; padding: 8px 16px; } .info, .dane { width: 100%; } .korpus { flex-direction: column; }
+    .grupa { width: 100%; } #urzadzenia { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="marka">Sterowanie przepływem gazu</div>
+  <div class="centrum">
+    <div id="polaczenie" class="polaczenie" role="status" aria-live="polite">
+      <span class="kropka"></span><span id="polaczenie-tekst"></span>
+    </div>
+    <div id="polaczenie-podpis" class="podpis"></div>
+  </div>
+  <div class="prawa">
+    <span id="status-zas">Zasilacz: brak danych</span>
+    <span id="status-ws"></span>
+    <button id="szukaj" type="button" title="Sprawdź ponownie wszystkie porty COM">Szukaj ponownie</button>
+  </div>
+</header>
+
+<main class="uklad">
+  <div class="zakladki" role="tablist" aria-label="Widok">
+    <button type="button" role="tab" aria-selected="true">Alicaty</button>
+    <button type="button" id="otworz-wykres" title="Wykres otworzy się w nowej zakładce przeglądarki i działa na tych samych danych">Wykres w nowej zakładce ↗</button>
+  </div>
+  <section class="okno-alicaty" id="okno-alicaty" aria-label="Okno Alicatów">
+    <div id="urzadzenia"></div>
+    <div class="prawa-kolumna">
+      <section id="suma" class="karta suma" aria-label="Suma sccm"></section>
+      <section id="zasilacz" class="karta" aria-label="Zasilacz" data-karta="zasilacz"></section>
+    </div>
+  </section>
+
+  <section class="karta okno-wykresu" id="okno-wykresu" aria-label="Wykres">
+    <div class="wyb" id="wyk-wybor"></div>
+    <div id="ogolny">
+      <div class="naglowek-danych"><h3>Wykres</h3><span id="wyk-stan"></span></div>
+      <div class="opcje-rzad"><div>
+      <div class="opcje">
+        <label>Oś X <select id="wyk-x"></select></label>
+        <label>Oś Y <select id="wyk-y"></select></label>
+        <label>Zakres X (od – do)
+          <span class="zakres"><input id="x-min" type="number" step="any" placeholder="auto"><input id="x-max" type="number" step="any" placeholder="auto"></span></label>
+        <label>Zakres Y (od – do)
+          <span class="zakres"><input id="y-min" type="number" step="any" placeholder="auto"><input id="y-max" type="number" step="any" placeholder="auto"></span></label>
+        <button id="zakres-auto" type="button">Zakresy automatyczne</button>
+      </div>
+      <div class="przyciski-wykresu">
+        <button id="wyczysc" type="button" title="Kasuje wykres zaznaczonych Alicatów i czeka na początek przepływu">Wyczyść</button>
+        <button id="zapisz" type="button" class="start" title="Zapisz wykres lub dane do pliku">Zapisz…</button>
+        <button id="odswiez" type="button" title="Kończy ten pomiar i od razu zaczyna nowy wykres od zera">Odśwież</button>
+      </div></div>
+      <div class="suma-wyk" id="suma-wyk" aria-label="Suma przepływu"></div></div>
+      <canvas id="wykres" aria-label="Wykres"></canvas>
+    </div>
+  </section>
+</main>
+
+<dialog id="dialog-edycja">
+  <form id="formularz-edycji" method="dialog">
+    <b id="edycja-tytul">Ustawienia urządzenia</b>
+    <label>Nazwa <input name="nazwa" maxlength="20" required></label>
+    <label>Zakres urządzenia <input name="full_scale" type="number" step="any" min="0" required></label>
+    <label>Jednostka <input name="jednostka" maxlength="10" required></label>
+    <label>Limit bezpieczeństwa [% zakresu] <input name="max_pct" type="number" step="any" min="0.1" max="100" required></label>
+    <div class="stale" id="edycja-stale"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end">
+      <button type="button" id="edycja-anuluj">Anuluj</button>
+      <button type="submit" class="start">Zapisz</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dialog-zapis">
+  <form id="formularz-zapisu" method="dialog">
+    <b>Zapisz pomiar</b>
+    <label>Co zapisać
+      <select id="zapis-format">
+        <option value="csv">Dane (plik CSV, do Excela)</option>
+        <option value="png">Wykres (obraz PNG)</option>
+      </select></label>
+    <label>Nazwa pliku <input id="zapis-nazwa" maxlength="80" required></label>
+    <div class="stale" id="zapis-opis"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end">
+      <button type="button" id="zapis-anuluj">Anuluj</button>
+      <button type="submit" class="start">Wybierz miejsce i zapisz</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" hidden></div>
+
+<script>
+"use strict";
+
+const ETYKIETY_WYKRESU = {
+  czas: "Czas [s]",
+  przeplyw_pct: "Przepływ masowy [% zakresu]",
+  przeplyw_mas: "Przepływ masowy [jedn. urządzenia]",
+  przeplyw_obj: "Przepływ objętościowy [jedn. urządzenia]",
+  setpoint_pct: "Setpoint [% zakresu]",
+  setpoint: "Setpoint [jedn. urządzenia]",
+  cel_pct: "Cel regulacji [% zakresu]",
+  cisnienie: "Ciśnienie",
+  temperatura: "Temperatura",
+  totalizator: "Totalizator",
+};
+const PARA_NASTAWY = { przeplyw_pct: "setpoint_pct", przeplyw_mas: "setpoint" };
+
+const WIERSZE = [
+  ["przeplyw_mas", "Przepływ masowy", true], ["przeplyw_obj", "Przepływ objętościowy"], ["setpoint", "Setpoint", true],
+  ["cisnienie", "Ciśnienie"], ["temperatura", "Temperatura"], ["totalizator", "Totalizator"], ["gaz", "Gaz"],
+  ["zawor", "Zawór"], ["cel", "Cel regulacji"], ["regulacja", "Regulacja"], ["x", "Moc x (tryb liniowy)"],
+  ["korekta", "Korekta komputera"], ["komunikacja", "Komunikacja"],
+];
+const KOLUMNY_OSTATNICH = ["Czas", "Ciśn.", "Temp.", "Przepł. obj.", "Przepł. mas.", "Setpoint", "Totalizator", "Gaz", "Flagi"];
+
+const NAZWY_TRYBOW = { skokowa: "Skokowy", liniowa: "Liniowy", pwm: "PWM" };
+const KOLEJNOSC_TRYBOW = ["skokowa", "liniowa", "pwm"];
+const OPISY_TRYBOW = {
+  skokowa: "Stały przepływ: wpisujesz dokładną wartość do utrzymania. Działa bez zasilacza.",
+  liniowa: "y = a · x + b: przepływ y wynika z mocy zasilacza x (%). Bez danych z zasilacza liczy z wpisanego x.",
+  pwm: "Przepływ przełącza się cyklicznie między wartością wysoką i niską.",
+};
+const POLA = {
+  skokowa: [{ k: "cel_pct", e: "Przepływ do utrzymania", j: "% zakresu", min: 0, max: 100, step: 0.1, rodzaj: "przeplyw" }],
+  pwm: [
+    { k: "okres_s", e: "Okres", j: "s", min: 1, max: 3600, step: 0.5 },
+    { k: "wypelnienie_pct", e: "Wypełnienie", j: "%", min: 0, max: 100, step: 1 },
+    { k: "wysoki_pct", e: "Przepływ wysoki", j: "% zakresu", min: 0, max: 100, step: 0.1, rodzaj: "przeplyw" },
+    { k: "niski_pct", e: "Przepływ niski", j: "% zakresu", min: 0, max: 100, step: 0.1, rodzaj: "przeplyw" },
+  ],
+  liniowa: [
+    { k: "a", e: "a", j: "", min: -100000, max: 100000, step: 0.01, rodzaj: "wspolczynnik" },
+    { k: "b", e: "b", j: "% zakresu", min: -100000, max: 100000, step: 0.1, rodzaj: "przeplyw" },
+    { k: "x_pct", e: "x: moc zasilacza", j: "%", min: 0, max: 100, step: 0.1 },
+  ],
+};
+const MAX_ZYWE = 1200, MAX_HISTORIA = 50000;
+const ZRODLA_ZAKRESU = {
+  model: "odczytany z modelu urządzenia", "ręczny": "wpisany ręcznie",
+  "zapamiętany": "zapamiętany z poprzedniej sesji", "domyślny": "domyślny, nie udało się odczytać",
+};
+const STAN = { urzadzenia: {}, historia: {}, zasilacz: { polaczony: false, moc_pct: null },
+               skanowanie: { trwa: false, bledy: {} }, limit: { wlacz: false, max: null }, nieuzywane: new Set() };
+try { STAN.nieuzywane = new Set(JSON.parse(localStorage.getItem("nieuzywane") || "[]")); } catch (e) { }
+
+let ws = null;
+let KOL = {};
+
+function pref(klucz, wartosc_) {
+  try {
+    const p = JSON.parse(localStorage.getItem("ustawienia") || "{}");
+    if (wartosc_ === undefined) return p[klucz];
+    p[klucz] = wartosc_;
+    localStorage.setItem("ustawienia", JSON.stringify(p));
+  } catch (e) { }
+}
+function el(tag, props = {}, ...dzieci) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k === "dataset") Object.assign(e.dataset, v);
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const d of dzieci.flat()) e.append(d instanceof Node ? d : document.createTextNode(String(d)));
+  return e;
+}
+const fmt = (x, m = 2) => (typeof x === "number" && Number.isFinite(x)) ? x.toFixed(m) : "—";
+const grupaDla = (id) => document.querySelector(`.grupa[data-id="${CSS.escape(id)}"]`);
+const pole = (g, nazwa) => g.querySelector(`[data-pole="${nazwa}"]`);
+const wartosc = (id) => document.getElementById(id);
+const kolejnosc = () => Object.values(STAN.urzadzenia);
+
+function ustaw(g, nazwa, tekst, klasa = "") {
+  const e = pole(g, nazwa);
+  if (e) { e.textContent = tekst; e.className = klasa + (e.classList.contains("dlugi") ? " dlugi" : ""); }
+}
+
+let toastTimer = null;
+function toast(tekst) {
+  const t = wartosc("toast");
+  t.textContent = tekst;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+}
+
+function etykietaPortu(p) {
+  const m = /^socket:\/\/[^:]+:(\d+)/.exec(p || "");
+  return m ? `symulator :${m[1]}` : (p || "?");
+}
+
+function polacz() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => pokazStatusSerwera(true);
+  ws.onclose = () => { pokazStatusSerwera(false); setTimeout(polacz, 2000); };
+  ws.onmessage = (e) => obsluz(JSON.parse(e.data));
+}
+
+function wyslij(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(obj)); return true; }
+  toast("Brak połączenia z serwerem programu. Uruchom go ponownie (python serwer.py).");
+  return false;
+}
+
+function pokazStatusSerwera(ok) {
+  const e = wartosc("status-ws");
+  e.textContent = ok ? "serwer: działa" : "serwer: brak połączenia";
+  e.className = ok ? "" : "zle";
+}
+
+function dodajUrzadzenie(opis) {
+  const stare = STAN.urzadzenia[opis.id];
+  const u = Object.assign(stare || { zywe: [], ostatni: null, wykres: Object.assign({ x: "czas", y: "przeplyw_pct", okno: 60 }, pref("zywy:" + opis.id) || {}) }, opis);
+  STAN.urzadzenia[u.id] = u;
+  return u;
+}
+
+function obsluz(msg) {
+  switch (msg.typ) {
+    case "stan_poczatkowy": {
+      STAN.urzadzenia = {};
+      STAN.historia = msg.historia || {};
+      for (const o of msg.urzadzenia) { const u = dodajUrzadzenie(o); u.zywe = (msg.zywe || {})[o.id] || []; }
+      STAN.zasilacz = msg.zasilacz || STAN.zasilacz;
+      STAN.limit = msg.limit_sumy || STAN.limit;
+      STAN.skanowanie = msg.skanowanie || STAN.skanowanie;
+      renderujWszystko();
+      zamknijNieuzywane();
+      break;
+    }
+    case "pomiar": {
+      const u = STAN.urzadzenia[msg.id];
+      if (!u) break;
+      u.ostatni = msg;
+      u.aktywny = msg.aktywny;
+      if (msg.dane) {
+        u.zywe.push(msg.dane);
+        if (u.zywe.length > MAX_ZYWE) u.zywe.shift();
+        if (u.nagrywa) {
+          const h = (STAN.historia[msg.id] = STAN.historia[msg.id] || []);
+          h.push(msg.dane);
+          if (h.length > MAX_HISTORIA) h.shift();
+        }
+      }
+      if (typeof msg.polaczony === "boolean" && msg.polaczony !== u.polaczony) { u.polaczony = msg.polaczony; odswiezPolaczenie(); odswiezTryby(); }
+      aktualizujGrupe(msg.id);
+      odswiezSume();
+      if (JSON.stringify(msg.awarie || []) !== u.kodyAwarii) { u.kodyAwarii = JSON.stringify(msg.awarie || []); odswiezPolaczenie(); }
+      zaplanujWykresy();
+      break;
+    }
+    case "historia_reset":
+      STAN.historia[msg.id] = [];
+      zaplanujWykresy();
+      break;
+    case "nagrywanie": {
+      const u = STAN.urzadzenia[msg.id];
+      if (u) { u.nagrywa = msg.nagrywa; u.plik = msg.plik || null; zaplanujWykresy(); }
+      break;
+    }
+    case "regulacja": {
+      const u = STAN.urzadzenia[msg.id];
+      if (u) { u.aktywny = msg.aktywny; aktualizujGrupe(msg.id); odswiezTryby(); }
+      break;
+    }
+    case "warunki": {
+      const u = STAN.urzadzenia[msg.id];
+      if (!u) break;
+      u.warunki[msg.tryb] = msg.warunki;
+      odswiezTryby();
+      break;
+    }
+    case "tryb": {
+      const u = msg.id ? STAN.urzadzenia[msg.id] : null;
+      if (u) { u.tryb = msg.tryb; aktualizujGrupe(msg.id); odswiezTryby(); }
+      break;
+    }
+    case "urzadzenie_dodane": {
+      const u = dodajUrzadzenie(msg.urzadzenie);
+      STAN.historia[u.id] = STAN.historia[u.id] || [];
+      wstawGrupe(u);
+      zamknijNieuzywane();
+      odswiezListeWykresu();
+      odswiezPolaczenie();
+      odswiezWybor();
+      odswiezTryby();
+      break;
+    }
+    case "urzadzenie_zmienione": {
+      const u = dodajUrzadzenie(msg.urzadzenie);
+      aktualizujGrupe(u.id);
+      odswiezListeWykresu();
+      odswiezWybor();
+      odswiezTryby();
+      break;
+    }
+    case "urzadzenie_stan": {
+      const u = STAN.urzadzenia[msg.id];
+      if (!u) break;
+      u.polaczony = msg.polaczony;
+      for (const k of ["port", "baudrate", "unit"]) if (msg[k] !== undefined) u[k] = msg[k];
+      if (!msg.polaczony) u.aktywny = false;
+      aktualizujGrupe(u.id);
+      odswiezPolaczenie();
+      odswiezWybor();
+      odswiezTryby();
+      break;
+    }
+    case "urzadzenie_usuniete": {
+      delete STAN.urzadzenia[msg.id];
+      delete STAN.historia[msg.id];
+      STAN.nieuzywane.delete(msg.id);
+      zapiszNieuzywane();
+      const g = grupaDla(msg.id);
+      if (g) g.remove();
+      odswiezListeWykresu();
+      odswiezPolaczenie();
+      odswiezWybor();
+      odswiezTryby();
+      pokazPusty();
+      break;
+    }
+    case "limit_sumy":
+      STAN.limit = { wlacz: msg.wlacz, max: msg.max };
+      pokazLimit(); odswiezSume();
+      break;
+    case "zasilacz":
+      STAN.zasilacz = msg;
+      pokazZasilacz();
+      break;
+    case "skanowanie":
+      STAN.skanowanie = msg;
+      odswiezPolaczenie();
+      break;
+    case "blad":
+      toast(msg.komunikat);
+      odswiezTryby(true);
+      break;
+  }
+}
+
+function listaPolaczonych() {
+  const porty = [];
+  for (const u of kolejnosc()) if (u.polaczony && !porty.includes(u.port)) porty.push(u.port);
+  return porty;
+}
+
+function odswiezPolaczenie() {
+  const porty = listaPolaczonych().map(etykietaPortu);
+  const pasek = wartosc("polaczenie"), tekst = wartosc("polaczenie-tekst"), podpis = wartosc("polaczenie-podpis");
+  const bledy = Object.entries(STAN.skanowanie.bledy || {});
+  tekst.replaceChildren();
+  let lista;
+  if (porty.length === 0) lista = "COM …";
+  else if (porty.length === 1) lista = porty[0];
+  else lista = porty.slice(0, -1).join(", ") + " i " + porty[porty.length - 1];
+  tekst.append("Połączono z urządzeniem = ", porty.length ? el("b", {}, lista) : lista);
+  pasek.className = "polaczenie " + (porty.length ? "jest" : (STAN.skanowanie.trwa ? "szuka" : ""));
+
+  podpis.replaceChildren();
+  const n = kolejnosc().filter((u) => u.polaczony).length;
+  const awaryjne = kolejnosc().filter((u) => u.ostatni && (u.ostatni.awarie || []).length);
+  if (awaryjne.length) {
+    podpis.append(el("span", { class: "zle" }, "Awaria: " + awaryjne.map((u) => `${u.nazwa}: ${u.ostatni.awarie[0].tytul}`).join("; ")));
+  } else if (bledy.length) {
+    podpis.append(el("span", { class: "zle" }, bledy.map(([p]) => `${etykietaPortu(p)}: zajęty albo niedostępny`).join("; ")),
+      " (zamknij program, który go używa)");
+  } else if (porty.length) {
+    podpis.append(n === 1 ? "1 urządzenie" : `${n} urządzenia`);
+  } else if (STAN.skanowanie.trwa) {
+    podpis.append("Szukam urządzeń na portach COM…");
+  } else {
+    podpis.append("Podłącz Alicata kablem do komputera, program znajdzie go sam.");
+  }
+  pokazPusty();
+}
+
+function budujZasilacz() {
+  const w = (k, d) => { try { return localStorage.getItem("zas_" + k) || d; } catch (e) { return d; } };
+  const wiersz = (e, p, j) => el("tr", {}, el("th", { scope: "row" }, e), el("td", { dataset: { zas: p } }, "—"), el("td", { class: "jedn" }, j));
+  const wejscieZas = (k, def, e, j) => {
+    const inp = el("input", { type: "number", step: "any", min: "0", id: "zas-" + k, value: w(k, def),
+      oninput: () => { try { localStorage.setItem("zas_" + k, inp.value); } catch (x) { } wyslijZasilacz(); } });
+    return el("label", { class: "pole" }, el("span", {}, e), inp, el("em", {}, j));
+  };
+  wartosc("zasilacz").replaceChildren(
+    el("div", { class: "naglowek-danych kartazw" }, el("h3", {}, "Zasilacz"),
+      el("div", { class: "przyc" }, el("span", { id: "zas-stan", class: "zas-stan" }, "brak danych"),
+        el("button", { type: "button", class: "mala", id: "zas-zwin", onclick: () => przelaczZasilacz() }, "▴ Zwiń"))),
+    el("div", { class: "zawartosc" },
+      el("table", { class: "tabela" }, el("tbody", {},
+        wiersz("Napięcie U", "u", "V"), wiersz("Prąd I", "i", "A"), wiersz("Moc P = U·I", "p", "W"),
+        wiersz("Moc maksymalna", "pmax", "W"), wiersz("Moc w % maks. (x)", "x", "%"), wiersz("Źródło", "zrodlo", ""))),
+      el("div", { class: "zas-reczne" },
+        wejscieZas("u", "0", "Napięcie", "V"), wejscieZas("i", "0", "Prąd", "A"), wejscieZas("pmax", "100", "Moc maks.", "W"),
+        el("label", { class: "przelacznik" }, el("input", { type: "checkbox", id: "zas-wysylaj", onchange: () => wyslijZasilacz() }), "Używaj tych wartości jako zasilacza"))));
+  const zw = zwiniete()["zasilacz"];
+  ustawZasilacz(!!zw);
+  setInterval(wyslijZasilacz, 1000);
+}
+function przelaczZasilacz() {
+  const st = zwiniete(); st["zasilacz"] = !st["zasilacz"];
+  try { localStorage.setItem("zwiniete", JSON.stringify(st)); } catch (e) { }
+  ustawZasilacz(!!st["zasilacz"]);
+}
+function ustawZasilacz(zw) {
+  wartosc("zasilacz").classList.toggle("zw", zw);
+  wartosc("zas-zwin").textContent = zw ? "▾ Rozwiń" : "▴ Zwiń";
+}
+let ostatnieZas = "";
+function wyslijZasilacz() {
+  const cb = wartosc("zas-wysylaj");
+  if (!cb || !cb.checked) { ostatnieZas = ""; return; }
+  const u = wpisane("zas-u"), i = wpisane("zas-i"), p = wpisane("zas-pmax");
+  if (u == null || i == null || !(p > 0)) return;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ typ: "zasilacz", napiecie: u, prad: i, p_max: p, zrodlo: "ręcznie" }));
+}
+
+function pokazZasilacz() {
+  const z = STAN.zasilacz, e = wartosc("status-zas"), st = wartosc("zas-stan");
+  e.textContent = z.polaczony ? `Zasilacz: ${fmt(z.moc_pct, 1)} % mocy` : "Zasilacz: brak danych";
+  e.className = z.polaczony ? "jest" : "";
+  e.title = z.polaczony ? "" : "Bez zasilacza każdy Alicat utrzymuje stały przepływ wpisany w trybach pracy.";
+  st.textContent = z.polaczony ? "dane napływają" : "brak danych";
+  st.className = "zas-stan" + (z.polaczony ? " jest" : "");
+  const ustawZ = (k, tekst) => { const c = document.querySelector(`[data-zas="${k}"]`); if (c) c.textContent = tekst; };
+  const ok = z.polaczony;
+  ustawZ("u", ok ? fmt(z.napiecie, 1) : "—"); ustawZ("i", ok ? fmt(z.prad, 3) : "—");
+  ustawZ("p", ok ? fmt(z.p_w, 1) : "—"); ustawZ("pmax", ok && z.p_max != null ? fmt(z.p_max, 0) : "—");
+  ustawZ("x", ok ? fmt(z.moc_pct, 1) : "—"); ustawZ("zrodlo", ok ? (z.zrodlo || "symulator / zewnętrzne") : "—");
+}
+
+function pokazPusty() {
+  const kontener = wartosc("urzadzenia");
+  let p = kontener.querySelector(".pusty");
+  if (Object.keys(STAN.urzadzenia).length) { if (p) p.remove(); return; }
+  if (!p) {
+    p = el("div", { class: "pusty" },
+      el("h2", {}, "Czekam na urządzenie"));
+    kontener.append(p);
+  }
+}
+
+const klucz = (u) => `${u.unit}|${u.port}`;
+
+function wstawGrupe(u) {
+  const kontener = wartosc("urzadzenia");
+  if (grupaDla(u.id)) return;
+  const nowa = zbudujGrupe(u);
+  const nastepna = [...kontener.querySelectorAll(".grupa")].find((g) => {
+    const w = STAN.urzadzenia[g.dataset.id];
+    return w && klucz(w) > klucz(u);
+  });
+  kontener.insertBefore(nowa, nastepna || null);
+  pokazPusty();
+  ustawSiatke();
+}
+
+function renderujWszystko() {
+  const kontener = wartosc("urzadzenia");
+  kontener.replaceChildren();
+  posortowane().forEach((u) => kontener.append(zbudujGrupe(u)));
+  odswiezListeWykresu();
+  odswiezPolaczenie();
+  pokazZasilacz();
+  odswiezWybor();
+  odswiezTryby(true);
+}
+
+function zwiniete() {
+  try { return JSON.parse(localStorage.getItem("zwiniete") || "{}"); } catch (e) { return {}; }
+}
+function przelaczZwiniecie(id) {
+  const stan = zwiniete();
+  stan[id] = !stan[id];
+  try { localStorage.setItem("zwiniete", JSON.stringify(stan)); } catch (e) { }
+  const g = grupaDla(id);
+  if (g) { ustawZwiniecie(g, stan[id]); zaplanujWykresy(); }
+}
+function ustawZwiniecie(g, zwinieta) {
+  g.classList.toggle("zwinieta", zwinieta);
+  const b = pole(g, "zwin");
+  b.textContent = zwinieta ? "▾ Rozwiń" : "▴ Zwiń";
+  b.title = zwinieta ? "Pokaż całe okno urządzenia" : "Ukryj okno. Urządzenie dalej pracuje i zapisuje pomiary";
+  b.setAttribute("aria-expanded", String(!zwinieta));
+}
+
+function zwijak(id, karta) {
+  return el("button", { type: "button", class: "mala", dataset: { zwijak: karta }, onclick: () => przelaczKarte(id, karta) }, "▴");
+}
+function przelaczKarte(id, karta) {
+  const stan = zwiniete(), k = `${id}#${karta}`;
+  stan[k] = !stan[k];
+  try { localStorage.setItem("zwiniete", JSON.stringify(stan)); } catch (e) { }
+  const g = grupaDla(id);
+  if (g) { ustawKarte(g, karta, stan[k]); zaplanujWykresy(); }
+}
+function ustawKarte(g, karta, zw) {
+  const sekcja = g.querySelector(`[data-karta="${karta}"]`), b = g.querySelector(`[data-zwijak="${karta}"]`);
+  sekcja.classList.toggle("zw", zw);
+  b.textContent = zw ? "▾ Rozwiń" : "▴ Zwiń";
+  b.title = zw ? "Pokaż to okno" : "Ukryj to okno";
+  b.setAttribute("aria-expanded", String(!zw));
+}
+
+function wierszInfo(etykieta, nazwaPola, dlugi = false) {
+  const k = dlugi ? "dlugi" : "";
+  return [el("dt", { class: k }, etykieta), el("dd", { class: k, dataset: { pole: nazwaPola } }, "—")];
+}
+
+function zbudujGrupe(u) {
+  const id = u.id;
+  const glowa = el("div", { class: "karta glowa" },
+    el("h2", { dataset: { pole: "nazwa" } }, u.nazwa),
+    el("span", { class: "znacznik", dataset: { pole: "znacznik" } }, "połączony"),
+    el("button", { type: "button", class: "mala zwin", dataset: { pole: "zwin" }, onclick: () => przelaczZwiniecie(id) }, "▴ Zwiń"),
+    el("span", { class: "mini", dataset: { pole: "mini" } }));
+
+  const info = el("section", { class: "karta info", "aria-label": "Okno urządzenia", dataset: { karta: "info" } },
+    el("div", { class: "kartazw" }, el("h3", {}, "Urządzenie"), zwijak(id, "info")),
+    el("div", { class: "zawartosc" }, el("dl", { class: "lista" },
+      wierszInfo("Nazwa", "nazwa2"), wierszInfo("Unit ID", "unit"), wierszInfo("Zakres", "zakres"), wierszInfo("Jednostka", "jednostka"),
+      wierszInfo("Baudrate", "baudrate"), wierszInfo("Limit bezpieczeństwa", "limit"),
+      wierszInfo("Port", "port"), wierszInfo("Nr seryjny", "sn"), wierszInfo("Model", "model", true)),
+    el("div", { class: "uwaga", dataset: { pole: "uwaga" }, hidden: "" }),
+    el("div", { class: "akcje" },
+      el("button", { type: "button", onclick: () => otworzEdycje(id) }, "Edytuj"),
+      el("button", { type: "button", dataset: { pole: "usun" }, hidden: "", onclick: () => usun(id) }, "Usuń z ekranu"))));
+
+  const wiersz = ([p, e, glowny]) => el("tr", { class: glowny ? "glowny" : "" }, el("th", { scope: "row" }, e), el("td", { dataset: { pole: p } }, "—"));
+  const dane = el("div", { class: "dane" },
+    el("section", { class: "karta", "aria-label": "Dane bieżące", dataset: { karta: "dane" } },
+      el("div", { class: "naglowek-danych kartazw" },
+        el("h3", {}, "Dane bieżące"),
+        el("div", { class: "zawory przyc" },
+          el("button", { type: "button", class: "mala", dataset: { pole: "otworz" }, onclick: () => { if (nieuzywany(id)) przelaczUzywany(id, true); else wyslij({ typ: "zawor", id, akcja: "otworz" }); } }, "Otwórz zawór"),
+          el("button", { type: "button", class: "mala", dataset: { pole: "zamknij" }, onclick: () => wyslij({ typ: "zawor", id, akcja: "zamknij" }) }, "Zamknij zawór"),
+          zwijak(id, "dane"))),
+      el("div", { class: "zawartosc" }, el("table", { class: "tabela" }, el("tbody", {}, WIERSZE.map(wiersz))),
+      el("div", { class: "podtytul" }, "Ostatnie pomiary"),
+      el("div", { class: "przewijana" },
+        el("table", { class: "ostatnie" },
+          el("thead", {}, el("tr", {}, KOLUMNY_OSTATNICH.map((t) => el("th", { scope: "col" }, t)))),
+          el("tbody", { dataset: { pole: "ostatnie" } }))))),
+    zbudujWykresZywy(u));
+
+  const g = el("div", { class: "grupa", dataset: { id } }, glowa, el("div", { class: "awarie", dataset: { pole: "awarie" }, hidden: "", role: "alert" }),
+    el("div", { class: "korpus" }, info, dane), zbudujPanelTrybow(u));
+  aktualizujGrupe(id, g);
+  ustawZwiniecie(g, !!zwiniete()[id]);
+  for (const k of ["info", "dane", "zywy", "tryby"]) ustawKarte(g, k, !!zwiniete()[`${id}#${k}`]);
+  return g;
+}
+
+function wyborOsi(u, os, bezCzasu) {
+  const s = el("select", { dataset: { os } });
+  for (const [k, e] of Object.entries(ETYKIETY_WYKRESU)) if (!(bezCzasu && k === "czas")) s.append(el("option", { value: k }, e));
+  s.value = u.wykres[os];
+  s.addEventListener("change", () => { u.wykres[os] = s.value; pref("zywy:" + u.id, u.wykres); zaplanujWykresy(); });
+  return s;
+}
+
+function zbudujWykresZywy(u) {
+  const okno = el("select", { dataset: { os: "okno" } },
+    el("option", { value: 30 }, "30 s"), el("option", { value: 60 }, "1 min"), el("option", { value: 300 }, "5 min"));
+  okno.value = u.wykres.okno;
+  okno.addEventListener("change", () => { u.wykres.okno = +okno.value; pref("zywy:" + u.id, u.wykres); zaplanujWykresy(); });
+  return el("section", { class: "karta", "aria-label": "Wykres na żywo", dataset: { karta: "zywy" } },
+    el("div", { class: "naglowek-danych kartazw" }, el("h3", {}, "Wykres na żywo"), el("div", { class: "przyc" }, zwijak(u.id, "zywy"))),
+    el("div", { class: "zawartosc" }, el("div", { class: "opcje zywe" },
+      el("label", {}, "Oś X", wyborOsi(u, "x", false)),
+      el("label", {}, "Oś Y", wyborOsi(u, "y", true)),
+      el("label", {}, "Okno", okno)),
+    el("canvas", { dataset: { zywy: u.id }, "aria-label": "Wykres na żywo" })));
+}
+
+function usun(id) {
+  const u = STAN.urzadzenia[id];
+  if (u && confirm(`Usunąć Alicata ${u.nazwa} z ekranu? Jeśli jest podłączony, program znajdzie go znowu przy kolejnym wyszukiwaniu.`)) {
+    wyslij({ typ: "usun_urzadzenie", id });
+  }
+}
+
+function aktualizujGrupe(id, grupaPodana) {
+  const u = STAN.urzadzenia[id], g = grupaPodana || grupaDla(id);
+  if (!u || !g) return;
+  const polaczony = u.polaczony !== false;
+  g.classList.toggle("rozlaczony", !polaczony);
+
+  const m = u.ostatni, d = m && m.dane;
+  ustaw(g, "nazwa", u.nazwa);
+  const z = pole(g, "znacznik");
+  z.textContent = polaczony ? "połączony" : "rozłączony";
+  z.className = "znacznik" + (polaczony ? "" : " zle");
+
+  ustaw(g, "nazwa2", u.nazwa);
+  ustaw(g, "unit", u.unit);
+  ustaw(g, "zakres", String(u.full_scale));
+  ustaw(g, "jednostka", u.jednostka);
+  ustaw(g, "baudrate", String(u.baudrate));
+  ustaw(g, "limit", `${u.max_pct} % · ${fmt(u.max_pct / 100 * u.full_scale, 0)} ${u.jednostka}`);
+  pole(g, "limit").title = "Limit bezpieczeństwa: nastawa nie przekroczy tej wartości";
+  pole(g, "limit").previousElementSibling.title = "Limit bezpieczeństwa";
+  ustaw(g, "port", etykietaPortu(u.port));
+  ustaw(g, "model", u.model || "—");
+  ustaw(g, "sn", u.numer_seryjny || "—");
+  const uw = pole(g, "uwaga");
+  uw.hidden = !(u.zakres_zrodlo === "domyślny");
+  uw.textContent = u.zakres_zrodlo === "domyślny"
+    ? "Zakresu nie udało się odczytać z urządzenia. Sprawdź go i popraw przyciskiem Edytuj." : "";
+  const zr = ZRODLA_ZAKRESU[u.zakres_zrodlo];
+  pole(g, "zakres").title = zr ? `Zakres ${zr}` : "";
+  pole(g, "usun").hidden = polaczony;
+
+  const awarie = (m && m.awarie) || [];
+  const pasek = pole(g, "awarie");
+  pasek.hidden = awarie.length === 0;
+  pasek.replaceChildren(...awarie.map((a) => el("div", { class: "awaria " + a.poziom },
+    el("b", {}, a.tytul), el("p", {}, a.opis), el("p", { class: "wsk" }, a.wskazowka),
+    a.szczegoly ? el("p", { class: "szcz" }, "Szczegóły: " + a.szczegoly) : "")));
+  z.textContent = awarie.length ? "awaria" : (polaczony ? "połączony" : "rozłączony");
+  z.className = "znacznik" + (awarie.length || !polaczony ? " zle" : "");
+  g.classList.toggle("nieuzywany", nieuzywany(u.id));
+  if (nieuzywany(u.id) && polaczony && !awarie.length) { z.textContent = "nie używany"; z.className = "znacznik zle"; }
+
+  const j = u.jednostka;
+  pole(g, "mini").textContent = `${etykietaPortu(u.port)} · ${d ? fmt(d.przeplyw_mas, 1) + " " + j : "—"}${u.aktywny ? " · regulacja" : ""}`;
+  if (d) {
+    ustaw(g, "przeplyw_mas", `${fmt(d.przeplyw_mas, 1)} ${j} (${fmt(d.przeplyw_pct, 1)} %)`);
+    ustaw(g, "przeplyw_obj", `${fmt(d.przeplyw_obj, 1)} ${j}`);
+    ustaw(g, "setpoint", `${fmt(d.setpoint, 1)} ${j} (${fmt(d.setpoint_pct, 1)} %)`);
+    ustaw(g, "cisnienie", fmt(d.cisnienie, 2));
+    ustaw(g, "temperatura", fmt(d.temperatura, 2));
+    ustaw(g, "totalizator", fmt(d.totalizator, 1));
+    ustaw(g, "gaz", m.gaz || "—");
+    ustaw(g, "cel", d.cel_pct == null ? "—" : `${fmt(d.cel_pct, 2)} %`);
+    const zamkniety = (m.flagi || []).includes("HLD");
+    ustaw(g, "zawor", zamkniety ? "zamknięty (HLD)" : "otwarty", zamkniety ? "zle" : "ok");
+    ustaw(g, "x", m.x ? `${fmt(m.x.pct, 1)} % (${m.x.zrodlo === "zasilacz" ? "z zasilacza" : "wpisane"})` : "—");
+    ustaw(g, "korekta", m.korekta == null ? "—" : (m.korekta ? "włączona" : "wyłączona"));
+  }
+  ustaw(g, "regulacja", u.aktywny ? `aktywna (${NAZWY_TRYBOW[u.tryb] || "?"})` : "wyłączona", u.aktywny ? "ok" : "");
+  if (!polaczony) ustaw(g, "komunikacja", "rozłączony", "zle");
+  else if (!m) ustaw(g, "komunikacja", "łączenie…");
+  else if (m.blad) ustaw(g, "komunikacja", "błąd", "zle");
+  else ustaw(g, "komunikacja", "OK", "ok");
+  for (const p of ["otworz", "zamknij"]) pole(g, p).disabled = !polaczony;
+
+  pole(g, "ostatnie").replaceChildren(...u.zywe.slice(-3).reverse().map((x) => el("tr", {},
+    el("td", {}, new Date(x.t * 1000).toLocaleTimeString("pl-PL")),
+    el("td", {}, fmt(x.cisnienie, 2)), el("td", {}, fmt(x.temperatura, 2)),
+    el("td", {}, fmt(x.przeplyw_obj, 1)), el("td", {}, fmt(x.przeplyw_mas, 1)), el("td", {}, fmt(x.setpoint, 1)),
+    el("td", {}, fmt(x.totalizator, 1)), el("td", {}, x.gaz || "—"), el("td", {}, (x.flagi || []).join(" ") || "—"))));
+}
+
+const PALETA = [["#0a6c9e", "#d4691a"], ["#6b3fa0", "#c2379b"], ["#1f8a70", "#b8860b"], ["#b02a37", "#5b6770"]];
+const posortowane = () => kolejnosc().sort((a, b) => klucz(a) < klucz(b) ? -1 : 1);
+const nieuzywany = (id) => STAN.nieuzywane.has(id);
+const naWykresie = () => posortowane();
+function kolorUrzadzenia(u) {
+  const i = Math.max(0, posortowane().findIndex((x) => x.id === u.id));
+  return PALETA[i % PALETA.length];
+}
+function nazwaKrotka(u) {
+  const takaSama = kolejnosc().filter((x) => x.unit === u.unit).length > 1;
+  return takaSama ? `${u.unit} (${etykietaPortu(u.port)})` : u.unit;
+}
+function zamknijNieuzywane() {
+  for (const u of kolejnosc()) if (nieuzywany(u.id) && u.polaczony !== false) wyslij({ typ: "stop", id: u.id });
+}
+function zapiszNieuzywane() {
+  try { localStorage.setItem("nieuzywane", JSON.stringify([...STAN.nieuzywane])); } catch (e) { }
+}
+
+function przelaczUzywany(id, uzywany) {
+  const u = STAN.urzadzenia[id];
+  if (!u) return;
+  if (uzywany) STAN.nieuzywane.delete(id); else { STAN.nieuzywane.add(id); if (u.aktywny && u.tryb) pref("wznow:" + id, u.tryb); }
+  zapiszNieuzywane();
+  const wznow = uzywany ? pref("wznow:" + id) : "";
+  if (uzywany) pref("wznow:" + id, "");
+  if (u.polaczony !== false) {
+    if (!uzywany) wyslij({ typ: "stop", id });
+    else if (wznow) startTryb(wznow, u);
+    else wyslij({ typ: "zawor", id, akcja: "otworz" });
+  }
+  odswiezWybor();
+  aktualizujGrupe(id);
+  odswiezTryby();
+  zaplanujWykresy();
+}
+
+function trybOpis(u) {
+  return u.aktywny ? `Tryb pracy: ${NAZWY_TRYBOW[u.tryb] || "?"}` : "Tryb pracy: regulacja wyłączona";
+}
+function odswiezTrybyWyboru() {
+  document.querySelectorAll("[data-wyb-tryb]").forEach((e) => {
+    const u = STAN.urzadzenia[e.dataset.wybTryb];
+    if (u && u.polaczony !== false && !nieuzywany(u.id)) e.textContent = trybOpis(u);
+  });
+}
+function odswiezWybor() {
+  const wszystkie = posortowane();
+  const k = wartosc("wyk-wybor");
+  k.replaceChildren(
+    el("h4", {}, "Alicaty"),
+    ...(wszystkie.length ? wszystkie.map((u) => {
+      const cb = el("input", { type: "checkbox", "aria-label": `Alicat ${nazwaKrotka(u)} w użyciu` });
+      cb.checked = !nieuzywany(u.id);
+      cb.disabled = u.polaczony === false;
+      cb.addEventListener("change", () => przelaczUzywany(u.id, cb.checked));
+      return el("label", { class: "wyb-wiersz" }, cb,
+        el("span", { class: "plamka", style: `background:${kolorUrzadzenia(u)[0]}` }),
+        el("span", { class: "wyb-tekst" }, el("b", {}, nazwaKrotka(u)), el("small", { dataset: { wybTryb: u.id } },
+          u.polaczony === false ? "rozłączony" : (nieuzywany(u.id) ? "nie używany, zawór zamknięty" : trybOpis(u)))));
+    }) : [el("p", { class: "opis" }, "Brak urządzeń.")]),
+    el("div", { class: "proces" },
+      el("button", { type: "button", class: "start duzy", id: "proces-start", onclick: startProcesu,
+        title: "Włącza regulację we wszystkich zaznaczonych Alicatach, w trybie zaznaczonym checkboxem „Uruchom przyciskiem Start na wykresie”, a jeśli nie zaznaczono, w trybie rozwiniętym w jego oknie" }, "▶ Start"),
+      el("button", { type: "button", class: "stop duzy", id: "proces-stop", onclick: stopProcesu,
+        title: "Zatrzymuje wszystkie Alicaty: nastawa 0 i zawory zamknięte" }, "■ Stop")));
+  const gotowe = wszystkie.filter((u) => u.polaczony !== false && !nieuzywany(u.id));
+  wartosc("proces-start").disabled = gotowe.length === 0;
+  wartosc("proces-stop").disabled = !wszystkie.some((u) => u.polaczony !== false);
+  ustawSiatke();
+  odswiezSume();
+  odswiezTytuly();
+}
+
+function startProcesu() {
+  const bez = [];
+  for (const u of posortowane()) {
+    if (u.polaczony === false || nieuzywany(u.id)) continue;
+    const tryb = pref("gotowy:" + u.id) || pref("otwarty:" + u.id) || u.tryb
+      || KOLEJNOSC_TRYBOW.find((t) => u.warunki && u.warunki[t] && Object.keys(u.warunki[t]).length);
+    if (!tryb) { bez.push(nazwaKrotka(u)); continue; }
+    startTryb(tryb, u);
+  }
+  if (bez.length) toast(`Wybierz tryb pracy i nastawy dla: ${bez.join(", ")} (zakładka Alicaty, Tryby pracy).`);
+}
+function stopProcesu() {
+  for (const u of posortowane()) if (u.polaczony !== false) wyslij({ typ: "stop", id: u.id });
+}
+
+function ustawSiatke() {
+  const siatka = wartosc("urzadzenia"), n = kolejnosc().length;
+  const kol = Math.min(2, Math.max(1, n));
+  siatka.style.setProperty("--kol", String(kol));
+  siatka.style.zoom = "1";
+  const okno = wartosc("okno-alicaty");
+  if (okno.offsetParent !== null && window.innerWidth > 900) {
+    const potrzeba = kol * 628 + (kol - 1) * 16 + 16, miejsce = okno.clientWidth - 300 - 16 - 8;
+    siatka.style.zoom = String(Math.max(0.62, Math.min(1, miejsce / potrzeba)));
+  }
+}
+
+function budujSume() {
+  wartosc("suma").replaceChildren(
+    el("h3", {}, "Zużycie gazu"),
+    el("div", { class: "suma-duza" }, el("span", { dataset: { suma: "przeplyw" } }, "—"), " ", el("small", { dataset: { suma: "jedn" } }, "sccm")),
+    el("div", { class: "suma-opis", dataset: { suma: "opis" } }, "Brak danych"),
+    el("table", { class: "tabela" }, el("tbody", { dataset: { suma: "lista" } })),
+    el("div", { class: "suma-nastawa" }, "Suma nastaw: ", el("b", { dataset: { suma: "nastawa" } }, "—")),
+    el("div", { class: "suma-limit" },
+      el("label", { class: "limit-wiersz" },
+        el("input", { type: "checkbox", id: "limit-wlacz", onchange: wyslijLimit }), el("span", {}, "Maks. suma z Alicatów")),
+      el("div", { class: "limit-pole" },
+        el("input", { type: "number", id: "limit-max", min: "0", step: "any", placeholder: "np. 3000", "aria-label": "Maksymalna suma przepływu", onchange: wyslijLimit }),
+        el("em", { dataset: { suma: "jedn2" } }, "sccm")),
+      el("div", { class: "suma-opis", id: "limit-opis" })));
+}
+
+function wyslijLimit() {
+  const wlacz = wartosc("limit-wlacz").checked, v = wartosc("limit-max").value;
+  if (wlacz && (v === "" || !(+v > 0))) { wartosc("limit-wlacz").checked = false; toast("Wpisz maksymalną sumę przepływu (większą od 0), a potem zaznacz pole."); return; }
+  wyslij({ typ: "limit_sumy", wlacz, max: v === "" ? null : +v });
+}
+function pokazLimit() {
+  const l = STAN.limit || { wlacz: false, max: null };
+  wartosc("limit-wlacz").checked = !!l.wlacz;
+  if (document.activeElement !== wartosc("limit-max")) wartosc("limit-max").value = l.max == null ? "" : l.max;
+  const obnizony = kolejnosc().some((u) => u.ostatni && u.ostatni.ograniczony);
+  const o = wartosc("limit-opis");
+  o.textContent = !l.wlacz ? "Wyłączony: Alicaty nie są ograniczane." : (obnizony ? "Limit osiągnięty: największe nastawy zostały obniżone, a małe zostają bez zmian." : "Włączony: suma nastaw nie przekroczy limitu.");
+  o.style.color = l.wlacz && obnizony ? "var(--bursztyn)" : "";
+}
+
+function odswiezSumeWykresu(lista, z, jedna, j) {
+  const k = wartosc("suma-wyk"), l = STAN.limit || { wlacz: false, max: null };
+  const dane = (u) => (u.ostatni && u.ostatni.dane) ? `${fmt(u.ostatni.dane.przeplyw_mas, 1)} ${u.jednostka}` : "—";
+  k.replaceChildren(
+    el("div", {}, "Suma przepływu"),
+    el("div", { class: "duza" }, jedna && z.length ? `${fmt(z.reduce((s, u) => s + (u.ostatni.dane.przeplyw_mas || 0), 0), 1)} ${j}` : "—"),
+    el("table", {}, el("tbody", {}, ...lista.map((u) => el("tr", {},
+      el("th", { scope: "row" }, el("span", { class: "plamka", style: `background:${kolorUrzadzenia(u)[0]}` }), " ", nazwaKrotka(u)), el("td", {}, dane(u)))))),
+    el("div", { class: "max" }, "Maks. suma: ", el("b", {}, l.wlacz && l.max != null ? `${l.max} ${j}` : "bez limitu")));
+}
+
+function odswiezSume() {
+  const lista = posortowane().filter((u) => u.polaczony !== false);
+  const pk = (k) => document.querySelector(`[data-suma="${k}"]`);
+  if (!pk("przeplyw")) return;
+  const z = lista.filter((u) => u.ostatni && u.ostatni.dane);
+  const jedn = [...new Set(lista.map((u) => u.jednostka))];
+  const jedna = jedn.length <= 1;
+  const suma = (pole) => z.reduce((s, u) => s + (u.ostatni.dane[pole] || 0), 0);
+  pk("przeplyw").textContent = z.length && jedna ? fmt(suma("przeplyw_mas"), 1) : "—";
+  pk("jedn").textContent = jedna ? (jedn[0] || "sccm") : "";
+  pk("jedn2").textContent = jedna ? (jedn[0] || "sccm") : "jedn.";
+  pokazLimit();
+  pk("nastawa").textContent = z.length && jedna ? `${fmt(suma("setpoint"), 1)} ${jedn[0] || ""}` : "—";
+  pk("opis").textContent = !lista.length ? "Brak połączonych Alicatów"
+    : (!jedna ? "Alicaty mają różne jednostki, nie sumuję" : (lista.length === 1 ? "z jednego Alicata" : `suma z ${lista.length} Alicatów`));
+  odswiezSumeWykresu(lista, z, jedna, jedn[0] || "sccm");
+  odswiezTrybyWyboru();
+  pk("lista").replaceChildren(...lista.map((u) => el("tr", {},
+    el("th", { scope: "row" }, el("span", { class: "plamka", style: `background:${kolorUrzadzenia(u)[0]}` }), " ", nazwaKrotka(u)),
+    el("td", {}, u.ostatni && u.ostatni.dane ? `${fmt(u.ostatni.dane.przeplyw_mas, 1)} ${u.jednostka}` : "—"))));
+}
+
+function trybWpisu() { try { return localStorage.getItem("wpis") === "pct" ? "pct" : "abs"; } catch (e) { return "abs"; } }
+function ustawWpis(w) {
+  try { localStorage.setItem("wpis", w); } catch (e) { }
+  odswiezTryby(true);
+}
+function zPct(rodzaj, pct, u) {
+  return (trybWpisu() === "abs" && rodzaj && u) ? +(pct * u.full_scale / 100).toPrecision(8) : pct;
+}
+function doPct(rodzaj, wartosc, u) {
+  return (trybWpisu() === "abs" && rodzaj && u) ? +(wartosc / u.full_scale * 100).toPrecision(10) : wartosc;
+}
+function zbierzWarunki(tryb, u) {
+  const dane = {}, g = grupaDla(u.id);
+  if (!g) return dane;
+  g.querySelectorAll(`input[data-k][data-tryb="${tryb}"]`).forEach((inp) => {
+    if (inp.value !== "" && Number.isFinite(+inp.value)) dane[inp.dataset.k] = doPct(inp.dataset.rodzaj, +inp.value, u);
+  });
+  return dane;
+}
+
+function wejscie(tryb, def, u) {
+  return el("input", {
+    type: "number", step: "any", dataset: { k: def.k, tryb, rodzaj: def.rodzaj || "", step: def.step, min: def.min, max: def.max },
+    onchange: () => zastosujWarunki(tryb, u),
+    oninput: () => {
+      odswiezPodpowiedzi(u);
+      clearTimeout(wejscie.czas && wejscie.czas[u.id + tryb]);
+      (wejscie.czas = wejscie.czas || {})[u.id + tryb] = setTimeout(() => zastosujWarunki(tryb, u), 700);
+    },
+  });
+}
+const poleFormularza = (tryb, d, u) =>
+  el("label", { class: "pole" }, el("span", {}, d.e), wejscie(tryb, d, u), el("em", { dataset: { em: d.k } }, d.j));
+
+function zbudujTryb(tryb, u) {
+  let formularz;
+  if (tryb === "liniowa") {
+    const [a, b, x] = POLA.liniowa;
+    formularz = [el("div", { class: "rownanie" }, "y = ", wejscie(tryb, a, u), " · x + ", wejscie(tryb, b, u)),
+      el("div", { class: "opis" }, "x – moc zasilacza, y – przepływ"), poleFormularza(tryb, x, u)];
+  } else {
+    formularz = POLA[tryb].map((d) => poleFormularza(tryb, d, u));
+  }
+  const det = el("details", { class: "tryb", dataset: { tryb } },
+    el("summary", {}, NAZWY_TRYBOW[tryb], el("span", { class: "aktywny", dataset: { pole: "aktywny" }, hidden: "" }, "aktywny")),
+    el("div", { class: "tresc" },
+      formularz,
+      el("div", { class: "podpowiedz", dataset: { pole: "podpowiedz" } }),
+      el("div", { class: "przyciski" },
+        el("button", { type: "button", class: "start", dataset: { pole: "start" }, onclick: () => startTryb(tryb, u) }, "Start regulacji"),
+        el("button", { type: "button", class: "stop", dataset: { pole: "stop" }, onclick: () => stopTryb(u) }, "Stop (przepływ 0)")),
+      el("label", { class: "gotowy", title: "Zaznaczony tryb uruchomi się razem z innymi (np. zmiana trybów w tym samym czasie), gdy klikniesz Start na zakładce wykresu" },
+        el("input", { type: "checkbox", dataset: { pole: "gotowy" }, onchange: (ev) => ustawGotowy(u, tryb, ev.target.checked) }),
+        el("span", {}, "Uruchom przyciskiem Start na wykresie"))));
+  if (pref("otwarty:" + u.id) === tryb) det.open = true;
+  det.addEventListener("toggle", () => {
+    if (!det.open) { if (pref("otwarty:" + u.id) === tryb) pref("otwarty:" + u.id, ""); return; }
+    pref("otwarty:" + u.id, tryb);
+    det.parentElement.querySelectorAll("details.tryb[open]").forEach((d) => { if (d !== det) d.open = false; });
+  });
+  return det;
+}
+
+function ustawGotowy(u, tryb, zaznaczony) {
+  if (zaznaczony) pref("gotowy:" + u.id, tryb); else if (pref("gotowy:" + u.id) === tryb) pref("gotowy:" + u.id, "");
+  if (zaznaczony) zastosujWarunki(tryb, u);
+  odswiezGotowe();
+}
+function odswiezGotowe() {
+  for (const u of kolejnosc()) {
+    const g = grupaDla(u.id);
+    if (!g) continue;
+    g.querySelectorAll("details.tryb").forEach((det) => { pole(det, "gotowy").checked = pref("gotowy:" + u.id) === det.dataset.tryb; });
+  }
+}
+function odswiezTytuly() {
+  for (const u of kolejnosc()) {
+    const g = grupaDla(u.id), t = g && pole(g, "tytul-tryby");
+    if (t) t.textContent = "Tryby pracy " + nazwaKrotka(u);
+  }
+}
+
+function zbudujPanelTrybow(u) {
+  const przycisk = (w, t) => el("button", { type: "button", class: "mala", dataset: { wpis: w }, onclick: () => ustawWpis(w) }, t);
+  return el("section", { class: "karta tryby-panel", "aria-label": "Tryby pracy", dataset: { karta: "tryby" } },
+    el("div", { class: "kartazw" }, el("h3", { dataset: { pole: "tytul-tryby" } }, "Tryby pracy " + nazwaKrotka(u)), zwijak(u.id, "tryby")),
+    el("div", { class: "zawartosc" },
+      el("div", { class: "wpis" }, el("small", {}, "Wpisuj przepływ w:"), przycisk("abs", "jednostkach"), przycisk("pct", "% zakresu")),
+      ...KOLEJNOSC_TRYBOW.map((t) => zbudujTryb(t, u))));
+}
+
+function odswiezEtykiety(u) {
+  const g = grupaDla(u.id);
+  if (!g) return;
+  const abs = trybWpisu() === "abs", j = u.jednostka;
+  g.querySelectorAll("[data-wpis]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wpis === (abs ? "abs" : "pct"))));
+  g.querySelectorAll("input[data-rodzaj]").forEach((inp) => {
+    const rodzaj = inp.dataset.rodzaj;
+    if (!rodzaj) return;
+    inp.min = abs ? (rodzaj === "przeplyw" && inp.dataset.k !== "b" ? 0 : -1e6) : inp.dataset.min;
+    inp.max = abs ? (inp.dataset.k === "b" || rodzaj === "wspolczynnik" ? 1e6 : u.full_scale) : inp.dataset.max;
+    const em = g.querySelector(`[data-em="${inp.dataset.k}"]`);
+    if (em) em.textContent = abs ? j : "% zakresu";
+  });
+}
+
+function odswiezTryby(wymus = false) {
+  for (const u of kolejnosc()) {
+    const g = grupaDla(u.id);
+    if (!g) continue;
+    g.querySelectorAll("input[data-k]").forEach((inp) => {
+      const w = u.warunki && u.warunki[inp.dataset.tryb];
+      if (w && w[inp.dataset.k] !== undefined && (wymus || document.activeElement !== inp)) inp.value = zPct(inp.dataset.rodzaj, w[inp.dataset.k], u);
+    });
+    const mozna = u.polaczony !== false && !nieuzywany(u.id);
+    g.querySelectorAll("details.tryb").forEach((det) => {
+      const t = det.dataset.tryb, znacznik = pole(det, "aktywny");
+      znacznik.hidden = !(u.aktywny && u.tryb === t);
+      pole(det, "start").disabled = !mozna;
+      pole(det, "stop").disabled = u.polaczony === false;
+      pole(det, "start").title = nieuzywany(u.id) ? "Ten Alicat jest odznaczony przy wykresie (zawór zamknięty)" : "";
+    });
+    odswiezEtykiety(u);
+    odswiezPodpowiedzi(u);
+  }
+  odswiezGotowe();
+  odswiezTytuly();
+}
+
+function odswiezPodpowiedzi(u) {
+  const g = grupaDla(u.id);
+  if (!g) return;
+  const naJedn = (pct) => `${fmt(pct / 100 * u.full_scale, 1)} ${u.jednostka}`;
+  for (const t of KOLEJNOSC_TRYBOW) {
+    const det = g.querySelector(`details.tryb[data-tryb="${t}"]`);
+    if (!det) continue;
+    const w = zbierzWarunki(t, u);
+    let opis = "";
+    if (t === "skokowa" && "cel_pct" in w) opis = `≈ ${naJedn(w.cel_pct)} (${fmt(w.cel_pct, 2)} % zakresu)`;
+    if (t === "liniowa" && "a" in w && "b" in w && "x_pct" in w) {
+      const y = w.a * w.x_pct + w.b;
+      let yo = Math.min(Math.max(y, 0), u.max_pct);
+      if (yo < 0.01) yo = 0;
+      opis = `y = ${fmt(y, 2)} %, ≈ ${naJedn(yo)}` + (yo !== y ? ` (ograniczone do 0 albo 0,01…${u.max_pct} %)` : "");
+    }
+    if (t === "pwm" && "wysoki_pct" in w && "niski_pct" in w) opis = `wysoki ≈ ${naJedn(w.wysoki_pct)}, niski ≈ ${naJedn(w.niski_pct)}`;
+    const czeka = u.aktywny && u.tryb === t && u.zast && u.zast.tryb === t && u.zast.dane !== JSON.stringify(w);
+    pole(det, "podpowiedz").textContent = opis + (czeka ? "  ● Zmiana czeka: kliknij „Start regulacji”, żeby ją zastosować." : "");
+  }
+}
+
+function zastosujWarunki(tryb, u) {
+  wyslij({ typ: "ustaw_warunki", id: u.id, tryb, dane: zbierzWarunki(tryb, u) });
+}
+
+function startTryb(tryb, u) {
+  if (nieuzywany(u.id)) { toast("Ten Alicat jest odznaczony przy wykresie. Zaznacz go, żeby go używać."); return; }
+  if (u.tryb !== tryb) wyslij({ typ: "ustaw_tryb", id: u.id, tryb });
+  const dane = zbierzWarunki(tryb, u);
+  u.zast = { tryb, dane: JSON.stringify(dane) };
+  wyslij({ typ: "ustaw_warunki", id: u.id, tryb, dane });
+  wyslij({ typ: "start", id: u.id });
+}
+
+function stopTryb(u) {
+  wyslij({ typ: "stop", id: u.id });
+}
+
+function odswiezListeWykresu() {
+  odswiezWybor();
+  zaplanujWykresy();
+}
+
+let wykresyZaplanowane = false;
+function zaplanujWykresy() {
+  if (wykresyZaplanowane) return;
+  wykresyZaplanowane = true;
+  requestAnimationFrame(() => { wykresyZaplanowane = false; rysujWszystkie(); });
+}
+
+function ladneTicki(min, max, n = 5) {
+  if (!(max > min)) { min -= 1; max += 1; }
+  const krok0 = (max - min) / n;
+  const mag = Math.pow(10, Math.floor(Math.log10(krok0)));
+  const norm = krok0 / mag;
+  const krok = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const ticki = [];
+  for (let v = Math.ceil(min / krok) * krok; v <= max + krok * 1e-9; v += krok) ticki.push(+v.toPrecision(12));
+  return ticki;
+}
+
+function rysuj(c, o) {
+  if (!c || c.offsetParent === null) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth, H = c.clientHeight;
+  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+  const g = c.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  g.font = `12px ${getComputedStyle(document.body).fontFamily}`;
+  const serie = o.serie;
+  const ile = serie.reduce((s, x) => s + x.pkt.length, 0);
+  g.fillStyle = KOL.tusz2;
+  if (ile === 0 && !o.stalyX) { g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(o.pusty, W / 2, H / 2); return; }
+
+  const L = 54, R = 12, T = 46, B = 40;
+  let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+  for (const s of serie) for (const p of s.pkt) {
+    if (p.x < xmin) xmin = p.x; if (p.x > xmax) xmax = p.x;
+    if (p.y < ymin) ymin = p.y; if (p.y > ymax) ymax = p.y;
+    if (p.s != null) { if (p.s < ymin) ymin = p.s; if (p.s > ymax) ymax = p.s; }
+  }
+  if (o.stalyX) { xmin = o.stalyX[0]; xmax = o.stalyX[1]; }
+  if (!isFinite(xmin)) { xmin = 0; xmax = 1; }
+  if (!isFinite(ymin)) { ymin = 0; ymax = 1; }
+  if (xmin === xmax) { xmin -= 1; xmax += 1; }
+  const marg = (ymax - ymin) * 0.08 || 1;
+  ymin -= marg; ymax += marg;
+  const r = o.reczne || {};
+  if (r.x0 != null) xmin = r.x0; if (r.x1 != null) xmax = r.x1;
+  if (r.y0 != null) ymin = r.y0; if (r.y1 != null) ymax = r.y1;
+  if (!(xmax > xmin)) xmax = xmin + 1;
+  if (!(ymax > ymin)) ymax = ymin + 1;
+  const px = (x) => L + (x - xmin) / (xmax - xmin) * (W - L - R);
+  const py = (y) => H - B - (y - ymin) / (ymax - ymin) * (H - T - B);
+
+  g.strokeStyle = KOL.siatka; g.lineWidth = 1;
+  g.textAlign = "right"; g.textBaseline = "middle";
+  for (const v of ladneTicki(ymin, ymax)) { g.beginPath(); g.moveTo(L, py(v)); g.lineTo(W - R, py(v)); g.stroke(); g.fillText(String(v), L - 6, py(v)); }
+  g.textAlign = "center"; g.textBaseline = "top";
+  for (const v of ladneTicki(xmin, xmax)) { g.beginPath(); g.moveTo(px(v), T); g.lineTo(px(v), H - B); g.stroke(); g.fillText(String(v), px(v), H - B + 5); }
+  g.strokeStyle = KOL.ramka; g.strokeRect(L, T, W - L - R, H - T - B);
+
+  g.save();
+  g.beginPath(); g.rect(L, T, W - L - R, H - T - B); g.clip();
+  for (const s of serie) {
+    const pkt = s.pkt, krok = Math.max(1, Math.ceil(pkt.length / 3000));
+    const linia = (klucz, kolor, szer, kreski) => {
+      g.strokeStyle = kolor; g.lineWidth = szer; g.setLineDash(kreski); g.lineJoin = "round"; g.beginPath();
+      let pierwszy = true;
+      const idx = [];
+      for (let i = 0; i < pkt.length; i += krok) idx.push(i);
+      if (pkt.length && idx[idx.length - 1] !== pkt.length - 1) idx.push(pkt.length - 1);
+      for (const i of idx) {
+        const v = pkt[i][klucz];
+        if (v == null) continue;
+        if (pierwszy) { g.moveTo(px(pkt[i].x), py(v)); pierwszy = false; } else g.lineTo(px(pkt[i].x), py(v));
+      }
+      g.stroke(); g.setLineDash([]);
+    };
+    s.maNastawe = pkt.some((p) => p.s != null);
+    linia("y", s.kolor, 2.6, []);
+    if (s.maNastawe) linia("s", s.kolorS, 2.2, [8, 5]);
+    if (pkt.length <= 120) { g.fillStyle = s.kolor; for (const p of pkt) { g.beginPath(); g.arc(px(p.x), py(p.y), 2.4, 0, 2 * Math.PI); g.fill(); } }
+  }
+  g.restore();
+
+  g.textBaseline = "middle"; g.textAlign = "left";
+  let lx = L + 2;
+  const wpis = (tekst, kolor, kreski) => {
+    g.strokeStyle = kolor; g.lineWidth = 2.6; g.setLineDash(kreski);
+    g.beginPath(); g.moveTo(lx, 12); g.lineTo(lx + 24, 12); g.stroke(); g.setLineDash([]);
+    g.fillStyle = KOL.tusz; g.fillText(tekst, lx + 30, 12);
+    lx += 30 + g.measureText(tekst).width + 16;
+  };
+  for (const s of serie) {
+    if (s.pkt.length === 0) continue;
+    wpis(s.nazwa, s.kolor, []);
+    if (s.maNastawe) wpis(s.nazwaS, s.kolorS, [8, 5]);
+  }
+
+  g.fillStyle = KOL.tusz; g.textAlign = "center"; g.textBaseline = "alphabetic";
+  g.fillText(o.xl, L + (W - L - R) / 2, H - 6);
+  g.textAlign = "left";
+  g.fillStyle = KOL.tusz2;
+  g.fillText(o.yl, L, T - 8);
+}
+
+function wpisane(id) { const v = wartosc(id).value; return v === "" ? null : +v; }
+
+function punktyOgolne(u, xk, yk, t0) {
+  const para = PARA_NASTAWY[yk];
+  return (STAN.historia[u.id] || [])
+    .map((d) => ({ x: xk === "czas" ? d.t - t0 : d[xk], y: d[yk], s: xk === "czas" && para ? d[para] : null }))
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+}
+function wspolneT0(lista) {
+  const t = lista.map((u) => (STAN.historia[u.id] || [])[0]).filter(Boolean).map((d) => d.t);
+  return t.length ? Math.min(...t) : 0;
+}
+
+function rysujWszystkie() {
+  document.querySelectorAll("canvas[data-zywy]").forEach((c) => {
+    const u = STAN.urzadzenia[c.dataset.zywy];
+    if (!u) return;
+    const { x: xk, y: yk, okno } = u.wykres;
+    const ostatni = u.zywe.length ? u.zywe[u.zywe.length - 1].t : 0;
+    const dane = u.zywe.filter((d) => d.t >= ostatni - okno);
+    const para = PARA_NASTAWY[yk], kol = kolorUrzadzenia(u);
+    const pkt = dane.map((d) => ({ x: xk === "czas" ? d.t - ostatni : d[xk], y: d[yk], s: xk === "czas" && para ? d[para] : null }))
+      .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    rysuj(c, { serie: [{ nazwa: "Pomiar", nazwaS: "Nastawa", kolor: kol[0], kolorS: kol[1], pkt }],
+      xl: xk === "czas" ? "Czas do ostatniego pomiaru [s]" : ETYKIETY_WYKRESU[xk], yl: ETYKIETY_WYKRESU[yk],
+      stalyX: xk === "czas" ? [-okno, 0] : null, pusty: "Czekam na pierwsze dane z urządzenia…" });
+  });
+
+  const lista = naWykresie();
+  const xk = wartosc("wyk-x").value, yk = wartosc("wyk-y").value;
+  const t0 = wspolneT0(lista), kilka = lista.length > 1;
+  const serie = lista.map((u) => {
+    const kol = kolorUrzadzenia(u);
+    return { nazwa: kilka ? nazwaKrotka(u) : "Pomiar", nazwaS: kilka ? `${nazwaKrotka(u)} nastawa` : "Nastawa",
+             kolor: kol[0], kolorS: kol[1], pkt: punktyOgolne(u, xk, yk, t0) };
+  });
+  const stan = wartosc("wyk-stan");
+  const trwa = lista.filter((u) => u.nagrywa);
+  const wszystkie = serie.reduce((s, x) => s + x.pkt.length, 0);
+  if (!lista.length) { stan.textContent = "brak Alicatów"; stan.className = ""; }
+  else if (trwa.length) {
+    const sek = Math.max(0, ...lista.map((u) => { const h = STAN.historia[u.id] || []; return h.length ? h[h.length - 1].t - t0 : 0; }));
+    stan.textContent = `● pomiar trwa (${trwa.map(nazwaKrotka).join(", ")}), ${fmt(sek, 0)} s, ${wszystkie} pkt`; stan.className = "trwa";
+  } else { stan.textContent = "czeka na początek przepływu"; stan.className = ""; }
+  wartosc("zapisz").disabled = wszystkie === 0;
+  for (const b of ["wyczysc", "odswiez"]) wartosc(b).disabled = !lista.length;
+  rysuj(wartosc("wykres"), { serie, xl: ETYKIETY_WYKRESU[xk], yl: ETYKIETY_WYKRESU[yk],
+    reczne: { x0: wpisane("x-min"), x1: wpisane("x-max"), y0: wpisane("y-min"), y1: wpisane("y-max") },
+    pusty: lista.length ? "Czekam na początek przepływu" : "Brak Alicatów" });
+}
+
+let edytowany = null;
+function otworzEdycje(id) {
+  const u = STAN.urzadzenia[id];
+  if (!u) return;
+  edytowany = id;
+  const f = wartosc("formularz-edycji");
+  f.nazwa.value = u.nazwa; f.full_scale.value = u.full_scale; f.jednostka.value = u.jednostka; f.max_pct.value = u.max_pct;
+  wartosc("edycja-tytul").textContent = `Ustawienia: ${u.nazwa}`;
+  wartosc("edycja-stale").textContent = `Unit ID ${u.unit}, baudrate ${u.baudrate} i port ${etykietaPortu(u.port)} wykrywa program. ` +
+    "Zmiana zakresu zatrzymuje regulację, bo procenty zmieniają wtedy znaczenie.";
+  wartosc("dialog-edycja").showModal();
+}
+
+function biezacyZakres() {
+  return { x0: wpisane("x-min"), x1: wpisane("x-max"), y0: wpisane("y-min"), y1: wpisane("y-max") };
+}
+function opisZakresu() {
+  const z = biezacyZakres(), ile = (a, b) => (a == null && b == null) ? "cały" : `${a ?? "…"} do ${b ?? "…"}`;
+  const kto = naWykresie().map(nazwaKrotka).join(", ") || "brak";
+  return `Alicaty: ${kto}. Zakres X: ${ile(z.x0, z.x1)}, zakres Y: ${ile(z.y0, z.y1)}. Zapisze się to, co widać na wykresie ogólnym (z Twoimi zmianami zakresów).`;
+}
+function dataDoNazwy() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+function ustawNazweZapisu() {
+  wartosc("zapis-nazwa").value = `pomiar_${dataDoNazwy()}.${wartosc("zapis-format").value}`;
+  wartosc("zapis-opis").textContent = opisZakresu();
+}
+function csvZWykresu() {
+  const lista = naWykresie(), xk = wartosc("wyk-x").value, yk = wartosc("wyk-y").value, z = biezacyZakres();
+  const t0 = wspolneT0(lista);
+  const klucze = [];
+  for (const u of lista) for (const d of (STAN.historia[u.id] || []).slice(0, 1)) for (const k of Object.keys(d)) if (k !== "flagi" && !klucze.includes(k)) klucze.push(k);
+  const kolumny = ["alicat", "czas_s", ...klucze, "flagi"];
+  const kom = (v) => v == null ? "" : String(Array.isArray(v) ? v.join(" ") : v).replace(".", ",");
+  const linie = [kolumny.join(";")];
+  let ile = 0;
+  for (const u of lista) {
+    for (const d of STAN.historia[u.id] || []) {
+      const x = xk === "czas" ? d.t - t0 : d[xk], y = d[yk];
+      if ((z.x0 != null && x < z.x0) || (z.x1 != null && x > z.x1) || (z.y0 != null && y < z.y0) || (z.y1 != null && y > z.y1)) continue;
+      linie.push(kolumny.map((k) => k === "alicat" ? u.nazwa : (k === "czas_s" ? kom(+(d.t - t0).toFixed(2)) : kom(d[k]))).join(";"));
+      ile++;
+    }
+  }
+  return { blob: new Blob(["﻿" + linie.join("\r\n")], { type: "text/csv;charset=utf-8" }), ile };
+}
+function pobierz(blob, nazwa) {
+  const a = el("a", { href: URL.createObjectURL(blob), download: nazwa });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function zapiszPlik(blob, nazwa, format) {
+  if (window.showSaveFilePicker) {
+    try {
+      const typ = format === "png" ? { description: "Obraz PNG", accept: { "image/png": [".png"] } }
+                                   : { description: "Plik CSV", accept: { "text/csv": [".csv"] } };
+      const uchwyt = await showSaveFilePicker({ suggestedName: nazwa, types: [typ] });
+      const w = await uchwyt.createWritable(); await w.write(blob); await w.close();
+      return uchwyt.name;
+    } catch (e) { if (e && e.name === "AbortError") return null; throw e; }
+  }
+  pobierz(blob, nazwa);
+  return nazwa;
+}
+async function wykonajZapis() {
+  const format = wartosc("zapis-format").value;
+  let nazwa = wartosc("zapis-nazwa").value.trim().replace(/[\\/:*?"<>|]/g, "_");
+  if (!nazwa.toLowerCase().endsWith("." + format)) nazwa += "." + format;
+  try {
+    let blob, info = "";
+    if (format === "csv") { const c = csvZWykresu(); blob = c.blob; info = `, ${c.ile} wierszy`; }
+    else blob = await new Promise((ok) => wartosc("wykres").toBlob(ok, "image/png"));
+    const zapisana = await zapiszPlik(blob, nazwa, format);
+    if (zapisana) { toast(`Zapisano: ${zapisana}${info}`); wartosc("dialog-zapis").close(); }
+  } catch (e) { toast("Nie udało się zapisać pliku: " + (e && e.message || e)); }
+}
+
+function init() {
+  const wykres = new URLSearchParams(location.search).get("widok") === "wykres";
+  document.body.classList.toggle("widok-wykres", wykres);
+  if (wykres) document.title = "Alicat: wykres";
+  wartosc("otworz-wykres").addEventListener("click", () => window.open("?widok=wykres", "alicat_wykres"));
+  window.addEventListener("storage", (e) => {
+    if (e.key !== "nieuzywane") return;
+    try { STAN.nieuzywane = new Set(JSON.parse(e.newValue || "[]")); } catch (x) { return; }
+    odswiezWybor(); kolejnosc().forEach((u) => aktualizujGrupe(u.id)); odswiezTryby(); zaplanujWykresy();
+  });
+  const css = getComputedStyle(document.documentElement);
+  KOL = { tusz: css.getPropertyValue("--tusz").trim(), tusz2: css.getPropertyValue("--tusz2").trim(),
+          akcent: css.getPropertyValue("--akcent").trim(), nastawa: css.getPropertyValue("--nastawa").trim(),
+          siatka: "#e3e9ed", ramka: "#9fb0ba" };
+
+  for (const [k, e] of Object.entries(ETYKIETY_WYKRESU)) {
+    wartosc("wyk-x").append(el("option", { value: k }, e));
+    if (k !== "czas") wartosc("wyk-y").append(el("option", { value: k }, e));
+  }
+  wartosc("wyk-x").value = pref("wyk-x") in ETYKIETY_WYKRESU ? pref("wyk-x") : "czas";
+  wartosc("wyk-y").value = (pref("wyk-y") in ETYKIETY_WYKRESU && pref("wyk-y") !== "czas") ? pref("wyk-y") : "przeplyw_pct";
+  for (const id of ["x-min", "x-max", "y-min", "y-max"]) { const v = pref(id); if (v !== undefined && v !== null) wartosc(id).value = v; }
+  for (const id of ["wyk-x", "wyk-y"]) wartosc(id).addEventListener("change", () => { pref(id, wartosc(id).value); zaplanujWykresy(); });
+  for (const id of ["x-min", "x-max", "y-min", "y-max"]) wartosc(id).addEventListener("input", () => { pref(id, wartosc(id).value); zaplanujWykresy(); });
+  wartosc("zakres-auto").addEventListener("click", () => {
+    for (const id of ["x-min", "x-max", "y-min", "y-max"]) { wartosc(id).value = ""; pref(id, ""); }
+    zaplanujWykresy();
+  });
+  wartosc("wyczysc").addEventListener("click", () => naWykresie().forEach((u) => wyslij({ typ: "wyczysc", id: u.id })));
+  wartosc("odswiez").addEventListener("click", () => naWykresie().forEach((u) => wyslij({ typ: "odswiez", id: u.id })));
+  window.addEventListener("resize", () => { ustawSiatke(); zaplanujWykresy(); });
+  wartosc("zapisz").addEventListener("click", () => { rysujWszystkie(); ustawNazweZapisu(); wartosc("dialog-zapis").showModal(); });
+  wartosc("zapis-format").addEventListener("change", ustawNazweZapisu);
+  wartosc("zapis-anuluj").addEventListener("click", () => wartosc("dialog-zapis").close());
+  wartosc("formularz-zapisu").addEventListener("submit", (e) => { e.preventDefault(); wykonajZapis(); });
+  wartosc("szukaj").addEventListener("click", () => { if (wyslij({ typ: "skanuj" })) toast("Sprawdzam wszystkie porty COM…"); });
+
+  const dialog = wartosc("dialog-edycja");
+  wartosc("edycja-anuluj").addEventListener("click", () => dialog.close());
+  wartosc("formularz-edycji").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (STAN.urzadzenia[edytowany] && wyslij({ typ: "ustaw_urzadzenie", id: edytowany, dane: {
+      nazwa: f.nazwa.value, full_scale: f.full_scale.value, jednostka: f.jednostka.value, max_pct: f.max_pct.value } })) dialog.close();
+  });
+
+  budujSume();
+  pokazLimit();
+  budujZasilacz();
+  odswiezWybor();
+  odswiezPolaczenie();
+  pokazZasilacz();
+  zaplanujWykresy();
+  polacz();
+}
+init();
+</script>
+</body>
+</html>

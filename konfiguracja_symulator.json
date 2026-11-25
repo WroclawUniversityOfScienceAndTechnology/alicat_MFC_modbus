@@ -1,0 +1,25 @@
+{
+  "ustawienia": {
+    "SNSYM65": {
+      "nazwa": "A",
+      "full_scale": 1000.0,
+      "jednostka": "sccm",
+      "max_pct": 50.0,
+      "zakres_zrodlo": "model"
+    },
+    "SNSYM66": {
+      "nazwa": "B",
+      "full_scale": 5000.0,
+      "jednostka": "sccm",
+      "max_pct": 50.0,
+      "zakres_zrodlo": "model"
+    }
+  },
+  "porty_dodatkowe": [
+    "socket://127.0.0.1:9100"
+  ],
+  "ignoruj_porty": [],
+  "tylko_porty": [
+    "socket://127.0.0.1:9100"
+  ]
+}
